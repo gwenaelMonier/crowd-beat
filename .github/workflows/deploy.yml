@@ -21,7 +21,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.minimum-release-age=0
 
       - name: Deploy to Vercel
         run: pnpm dlx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
