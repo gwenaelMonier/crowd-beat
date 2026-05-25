@@ -1,7 +1,7 @@
 # Collective Speaker
 
-Collective Speaker lets multiple people listen to the same YouTube video in perfect sync — paste a URL, hit play, and everyone connected hears it at the same time.
-Anyone in the room can control playback: load a new video, play, pause, or seek, and all listeners follow instantly.
+Collective Speaker lets multiple people listen to the same YouTube video in perfect sync — paste a URL and everyone connected hears it at the same time.
+Anyone in the room can load a new video or seek to a position and all listeners follow instantly — play and pause are personal controls.
 No account needed — just open the page, click to join, and you're part of the collective.
 
 ---
