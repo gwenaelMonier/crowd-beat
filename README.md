@@ -1,3 +1,11 @@
+# Collective Speaker
+
+Collective Speaker lets multiple people listen to the same YouTube video in perfect sync — paste a URL, hit play, and everyone connected hears it at the same time.
+Anyone in the room can control playback: load a new video, play, pause, or seek, and all listeners follow instantly.
+No account needed — just open the page, click to join, and you're part of the collective.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
