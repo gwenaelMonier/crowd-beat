@@ -89,7 +89,7 @@ export default function HomePage() {
         <SyncIndicator driftMs={driftMs} />
       </div>
 
-      {!audioUnlocked && playerReady && <JoinOverlay onJoin={handleJoin} />}
+      {!audioUnlocked && <JoinOverlay onJoin={handleJoin} />}
     </main>
   );
 }
