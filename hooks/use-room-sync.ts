@@ -10,6 +10,9 @@ import {
 } from '@/lib/sync-logic';
 
 const TICK_MS = 500;
+const SEEK_COOLDOWN_MS = 2000;
+const PRE_BUFFER_S = 0.5;
+const MAX_CATCHUP_RATE = 1.15;
 
 export type UseRoomSyncParams = {
   clockOffsetMs: number | null;
@@ -54,6 +57,7 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
   const [driftMs, setDriftMs] = useState(0);
   const stateRef = useRef<RoomState | null>(null);
   const currentVideoRef = useRef<string | null>(null);
+  const lastHardSeekRef = useRef(0);
 
   stateRef.current = state;
 
@@ -80,6 +84,7 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       const startPos = expectedPosition(state, serverNow(clockOffsetMs));
       player.loadVideoById(state.videoId, Math.max(0, startPos));
       currentVideoRef.current = state.videoId;
+      lastHardSeekRef.current = 0;
       return;
     }
 
@@ -100,6 +105,7 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       const player = getPlayer();
       if (!s || !player) return;
 
+      const now = Date.now();
       const decision = decideOnTick(
         s,
         player.getPlayerState(),
@@ -112,7 +118,17 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         setDriftMs(Math.round((expected - player.getCurrentTime()) * 1000));
       }
 
-      applyDecision(player, decision);
+      if (decision.kind === 'seek') {
+        if (now - lastHardSeekRef.current < SEEK_COOLDOWN_MS) {
+          player.setPlaybackRate(MAX_CATCHUP_RATE);
+        } else {
+          lastHardSeekRef.current = now;
+          player.seekTo(Math.max(0, decision.to - PRE_BUFFER_S), true);
+          player.setPlaybackRate(MAX_CATCHUP_RATE);
+        }
+      } else {
+        applyDecision(player, decision);
+      }
     }, TICK_MS);
     return () => clearInterval(id);
   }, [playerReady, audioUnlocked, clockOffsetMs, getPlayer]);
