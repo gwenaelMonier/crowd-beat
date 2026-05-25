@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import type { RoomState, ServerEvent } from '@/types/room';
 import { serverNow } from '@/lib/sync';
 
-const HARD_CORRECTION_S = 0.5;
+const HARD_CORRECTION_S = 1.0;
 const SOFT_CORRECTION_S = 0.03;
 const TICK_MS = 500;
-const SOFT_RATE_FAST = 1.05;
-const SOFT_RATE_SLOW = 0.95;
+const MAX_RATE_DELTA = 0.15;
+const RATE_GAIN = 0.5;
 
 export type UseRoomSyncParams = {
   clockOffsetMs: number | null;
@@ -100,7 +100,8 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         player.seekTo(expected, true);
         player.setPlaybackRate(1);
       } else if (abs > SOFT_CORRECTION_S) {
-        player.setPlaybackRate(drift > 0 ? SOFT_RATE_FAST : SOFT_RATE_SLOW);
+        const delta = Math.min(MAX_RATE_DELTA, abs * RATE_GAIN);
+        player.setPlaybackRate(drift > 0 ? 1 + delta : 1 - delta);
       } else {
         player.setPlaybackRate(1);
       }
