@@ -10,7 +10,6 @@ import {
 } from '@/lib/sync-logic';
 
 const TICK_MS = 500;
-const SEEK_COOLDOWN_MS = 4000;
 
 export type UseRoomSyncParams = {
   clockOffsetMs: number | null;
@@ -55,7 +54,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
   const [driftMs, setDriftMs] = useState(0);
   const stateRef = useRef<RoomState | null>(null);
   const currentVideoRef = useRef<string | null>(null);
-  const lastHardSeekRef = useRef(0);
 
   stateRef.current = state;
 
@@ -102,7 +100,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       const player = getPlayer();
       if (!s || !player) return;
 
-      const inSeekCooldown = Date.now() - lastHardSeekRef.current < SEEK_COOLDOWN_MS;
       const decision = decideOnTick(
         s,
         player.getPlayerState(),
@@ -115,8 +112,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         setDriftMs(Math.round((expected - player.getCurrentTime()) * 1000));
       }
 
-      if (decision.kind === 'seek' && inSeekCooldown) return;
-      if (decision.kind === 'seek') lastHardSeekRef.current = Date.now();
       applyDecision(player, decision);
     }, TICK_MS);
     return () => clearInterval(id);
