@@ -1,7 +1,7 @@
 import type { RoomState } from '@/types/room';
 
 export const HARD_CORRECTION_S = 0.3;
-export const SOFT_CORRECTION_S = 0.03;
+export const SOFT_CORRECTION_S = 0.01;
 export const MAX_RATE_DELTA = 0.15;
 export const RATE_GAIN = 0.5;
 
