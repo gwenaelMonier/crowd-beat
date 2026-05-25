@@ -44,7 +44,7 @@ export function LoadInput() {
           onKeyDown={(e) => e.key === 'Enter' && submit()}
         />
         <Button onClick={submit} disabled={loading || !value.trim()}>
-          {loading ? 'Loading…' : 'Load'}
+          {loading ? 'Loading…' : 'Load for everyone'}
         </Button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
