@@ -42,7 +42,7 @@ export function Player({ onReady, onStateChange }: Props) {
         },
         events: {
           onReady: (e) => {
-            e.target.setPlaybackQuality('small');
+            (e.target as unknown as { setPlaybackQuality: (q: string) => void }).setPlaybackQuality('small');
             onReady(e.target);
           },
           onStateChange: (e) => onStateChangeRef.current?.(e.target, e.data),
