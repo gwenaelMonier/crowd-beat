@@ -95,7 +95,10 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
   useEffect(() => {
     if (!playerReady || !audioUnlocked || clockOffsetMs === null) return;
-    let lastTime: number | null = null;
+    // Track the target of the last hard seek. While the player hasn't caught
+    // up to it (still buffering), suppress additional hard seeks so we don't
+    // loop seek → buffer → seek.
+    let pendingSeekTarget: number | null = null;
     const id = setInterval(() => {
       const s = stateRef.current;
       const player = getPlayer();
@@ -103,18 +106,14 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
       const playerState = player.getPlayerState();
       const currentTime = player.getCurrentTime();
-
-      // Stalled detection: player reports PLAYING but currentTime barely advanced.
-      // Skip correction so we don't pile seeks on top of a buffering player.
       const isPlaying = playerState === YT.PlayerState.PLAYING;
-      const expectedAdvance = TICK_MS / 1000;
-      const stalled =
-        isPlaying &&
-        lastTime !== null &&
-        currentTime - lastTime < expectedAdvance * 0.3;
-      if (stalled) {
-        lastTime = currentTime;
-        return;
+
+      if (pendingSeekTarget !== null) {
+        if (currentTime >= pendingSeekTarget - 0.1) {
+          pendingSeekTarget = null;
+        } else {
+          return;
+        }
       }
 
       const decision = decideOnTick(s, playerState, currentTime, serverNow(clockOffsetMs));
@@ -124,8 +123,10 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         setDriftMs(Math.round((expected - currentTime) * 1000));
       }
 
+      if (decision.kind === 'seek') {
+        pendingSeekTarget = decision.to;
+      }
       applyDecision(player, decision);
-      lastTime = player.getCurrentTime();
     }, TICK_MS);
     return () => clearInterval(id);
   }, [playerReady, audioUnlocked, clockOffsetMs, getPlayer]);
