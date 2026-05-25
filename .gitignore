@@ -45,3 +45,4 @@ next-env.d.ts
 
 # Use pnpm only
 package-lock.json
+.env*.local
