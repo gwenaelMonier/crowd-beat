@@ -41,7 +41,10 @@ export function Player({ onReady, onStateChange }: Props) {
           playsinline: 1,
         },
         events: {
-          onReady: (e) => onReady(e.target),
+          onReady: (e) => {
+            e.target.setPlaybackQuality('small');
+            onReady(e.target);
+          },
           onStateChange: (e) => onStateChangeRef.current?.(e.target, e.data),
         },
       });
