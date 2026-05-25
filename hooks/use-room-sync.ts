@@ -95,10 +95,14 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
   useEffect(() => {
     if (!playerReady || !audioUnlocked || clockOffsetMs === null) return;
-    // Track the target of the last hard seek. While the player hasn't caught
-    // up to it (still buffering), suppress additional hard seeks so we don't
-    // loop seek → buffer → seek.
+    // Adaptive pre-buffer: a hard seek on mobile costs measurable buffer time.
+    // We track the latency of the last completed seek and aim the next seek at
+    // `expected + measuredLatency` so the player lands on real-time when the
+    // buffer finishes — instead of landing in the past and triggering another
+    // seek immediately.
     let pendingSeekTarget: number | null = null;
+    let seekIssuedAt: number | null = null;
+    let seekLatencyMs = 0;
     const id = setInterval(() => {
       const s = stateRef.current;
       const player = getPlayer();
@@ -110,7 +114,13 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
       if (pendingSeekTarget !== null) {
         if (currentTime >= pendingSeekTarget - 0.1) {
+          if (seekIssuedAt !== null) {
+            const measured = Date.now() - seekIssuedAt;
+            seekLatencyMs =
+              seekLatencyMs === 0 ? measured : Math.round(seekLatencyMs * 0.5 + measured * 0.5);
+          }
           pendingSeekTarget = null;
+          seekIssuedAt = null;
         } else {
           return;
         }
@@ -124,7 +134,11 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       }
 
       if (decision.kind === 'seek') {
-        pendingSeekTarget = decision.to;
+        const adjusted = decision.to + seekLatencyMs / 1000;
+        pendingSeekTarget = adjusted;
+        seekIssuedAt = Date.now();
+        player.seekTo(adjusted, true);
+        return;
       }
       applyDecision(player, decision);
     }, TICK_MS);
