@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RoomState, ServerEvent } from '@/types/room';
 import { serverNow } from '@/lib/sync';
+import {
+  decideOnStateChange,
+  decideOnTick,
+  expectedPosition,
+} from '@/lib/sync-logic';
 
-const HARD_CORRECTION_S = 0.3;
-const SOFT_CORRECTION_S = 0.03;
 const TICK_MS = 500;
-const MAX_RATE_DELTA = 0.15;
-const RATE_GAIN = 0.5;
 
 export type UseRoomSyncParams = {
   clockOffsetMs: number | null;
@@ -23,9 +24,27 @@ export type UseRoomSyncResult = {
   driftMs: number;
 };
 
-function expectedPosition(state: RoomState, nowMs: number): number {
-  if (!state.isPlaying) return state.positionAtStart;
-  return state.positionAtStart + (nowMs - state.startedAt) / 1000;
+function applyDecision(
+  player: YT.Player,
+  decision: ReturnType<typeof decideOnStateChange>,
+): void {
+  switch (decision.kind) {
+    case 'noop':
+      return;
+    case 'play':
+      player.seekTo(decision.seekTo, true);
+      player.playVideo();
+      return;
+    case 'pause':
+      player.pauseVideo();
+      return;
+    case 'seek':
+      player.seekTo(decision.to, true);
+      return;
+    case 'setRate':
+      player.setPlaybackRate(decision.rate);
+      return;
+  }
 }
 
 export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
@@ -49,9 +68,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         // ignore
       }
     };
-    es.onerror = () => {
-      // EventSource auto-reconnects
-    };
     return () => es.close();
   }, []);
 
@@ -69,17 +85,12 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
     if (!state.videoId) return;
 
-    if (state.isPlaying) {
-      const target = expectedPosition(state, serverNow(clockOffsetMs));
-      if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
-        player.seekTo(target, true);
-        player.playVideo();
-      }
-    } else {
-      if (player.getPlayerState() !== YT.PlayerState.PAUSED) {
-        player.pauseVideo();
-      }
-    }
+    const decision = decideOnStateChange(
+      state,
+      player.getPlayerState(),
+      serverNow(clockOffsetMs),
+    );
+    applyDecision(player, decision);
   }, [state, playerReady, audioUnlocked, clockOffsetMs, getPlayer]);
 
   useEffect(() => {
@@ -87,34 +98,21 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
     const id = setInterval(() => {
       const s = stateRef.current;
       const player = getPlayer();
-      if (!s || !player || !s.videoId) return;
+      if (!s || !player) return;
 
-      const playerState = player.getPlayerState();
+      const decision = decideOnTick(
+        s,
+        player.getPlayerState(),
+        player.getCurrentTime(),
+        serverNow(clockOffsetMs),
+      );
 
-      if (!s.isPlaying) {
-        if (playerState === YT.PlayerState.PLAYING) {
-          player.pauseVideo();
-        }
-        return;
+      if (s.videoId && s.isPlaying && player.getPlayerState() === YT.PlayerState.PLAYING) {
+        const expected = expectedPosition(s, serverNow(clockOffsetMs));
+        setDriftMs(Math.round((expected - player.getCurrentTime()) * 1000));
       }
 
-      if (playerState !== YT.PlayerState.PLAYING) return;
-
-      const expected = expectedPosition(s, serverNow(clockOffsetMs));
-      const actual = player.getCurrentTime();
-      const drift = expected - actual;
-      setDriftMs(Math.round(drift * 1000));
-
-      const abs = Math.abs(drift);
-      if (abs > HARD_CORRECTION_S) {
-        player.seekTo(expected, true);
-        player.setPlaybackRate(1);
-      } else if (abs > SOFT_CORRECTION_S) {
-        const delta = Math.min(MAX_RATE_DELTA, abs * RATE_GAIN);
-        player.setPlaybackRate(drift > 0 ? 1 + delta : 1 - delta);
-      } else {
-        player.setPlaybackRate(1);
-      }
+      applyDecision(player, decision);
     }, TICK_MS);
     return () => clearInterval(id);
   }, [playerReady, audioUnlocked, clockOffsetMs, getPlayer]);

@@ -9,9 +9,11 @@ import { RoomHeader } from '@/components/room-header';
 import { JoinOverlay } from '@/components/join-overlay';
 import { useServerClock } from '@/hooks/use-server-clock';
 import { useRoomSync } from '@/hooks/use-room-sync';
+import type { RoomState } from '@/types/room';
 
 export default function HomePage() {
   const playerRef = useRef<YT.Player | null>(null);
+  const stateRef = useRef<RoomState | null>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -26,12 +28,25 @@ export default function HomePage() {
     setPlayerReady(true);
   }, []);
 
+  const handlePlayerStateChange = useCallback(
+    (player: YT.Player, playerState: number) => {
+      const s = stateRef.current;
+      if (!s) return;
+      if (!s.isPlaying && playerState === YT.PlayerState.PLAYING) {
+        player.pauseVideo();
+      }
+    },
+    [],
+  );
+
   const { state, listenerCount, driftMs } = useRoomSync({
     clockOffsetMs,
     getPlayer,
     playerReady,
     audioUnlocked,
   });
+
+  stateRef.current = state;
 
   useEffect(() => {
     if (!playerReady || !state?.videoId) return;
@@ -55,7 +70,7 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-6 p-6">
       <RoomHeader listenerCount={listenerCount} />
 
-      <Player onReady={handlePlayerReady} />
+      <Player onReady={handlePlayerReady} onStateChange={handlePlayerStateChange} />
 
       <LoadInput />
 
