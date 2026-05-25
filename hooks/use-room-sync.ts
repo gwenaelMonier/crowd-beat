@@ -95,21 +95,31 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
   useEffect(() => {
     if (!playerReady || !audioUnlocked || clockOffsetMs === null) return;
+    let lastTime: number | null = null;
     const id = setInterval(() => {
       const s = stateRef.current;
       const player = getPlayer();
       if (!s || !player) return;
 
-      const decision = decideOnTick(
-        s,
-        player.getPlayerState(),
-        player.getCurrentTime(),
-        serverNow(clockOffsetMs),
-      );
+      const playerState = player.getPlayerState();
+      const currentTime = player.getCurrentTime();
 
-      if (s.videoId && s.isPlaying && player.getPlayerState() === YT.PlayerState.PLAYING) {
+      // Stalled detection: player reports PLAYING but currentTime barely advanced.
+      // Skip correction so we don't pile seeks on top of a buffering player.
+      const isPlaying = playerState === YT.PlayerState.PLAYING;
+      const expectedAdvance = TICK_MS / 1000;
+      const stalled =
+        isPlaying &&
+        lastTime !== null &&
+        currentTime - lastTime < expectedAdvance * 0.3;
+      lastTime = currentTime;
+      if (stalled) return;
+
+      const decision = decideOnTick(s, playerState, currentTime, serverNow(clockOffsetMs));
+
+      if (s.videoId && s.isPlaying && isPlaying) {
         const expected = expectedPosition(s, serverNow(clockOffsetMs));
-        setDriftMs(Math.round((expected - player.getCurrentTime()) * 1000));
+        setDriftMs(Math.round((expected - currentTime) * 1000));
       }
 
       applyDecision(player, decision);
