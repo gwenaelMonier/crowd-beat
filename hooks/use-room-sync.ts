@@ -5,8 +5,8 @@ import type { RoomState, ServerEvent } from '@/types/room';
 import { serverNow } from '@/lib/sync';
 
 const HARD_CORRECTION_S = 0.5;
-const SOFT_CORRECTION_S = 0.1;
-const TICK_MS = 2000;
+const SOFT_CORRECTION_S = 0.03;
+const TICK_MS = 500;
 const SOFT_RATE_FAST = 1.05;
 const SOFT_RATE_SLOW = 0.95;
 
@@ -35,7 +35,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
   const [driftMs, setDriftMs] = useState(0);
   const stateRef = useRef<RoomState | null>(null);
   const currentVideoRef = useRef<string | null>(null);
-  const softCorrectionUntil = useRef(0);
 
   stateRef.current = state;
 
@@ -70,8 +69,8 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
 
     if (!state.videoId) return;
 
-    const target = expectedPosition(state, serverNow(clockOffsetMs));
     if (state.isPlaying) {
+      const target = expectedPosition(state, serverNow(clockOffsetMs));
       if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
         player.seekTo(target, true);
         player.playVideo();
@@ -79,7 +78,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
     } else {
       if (player.getPlayerState() !== YT.PlayerState.PAUSED) {
         player.pauseVideo();
-        player.seekTo(target, true);
       }
     }
   }, [state, playerReady, audioUnlocked, clockOffsetMs, getPlayer]);
@@ -101,11 +99,9 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       if (abs > HARD_CORRECTION_S) {
         player.seekTo(expected, true);
         player.setPlaybackRate(1);
-        softCorrectionUntil.current = 0;
       } else if (abs > SOFT_CORRECTION_S) {
         player.setPlaybackRate(drift > 0 ? SOFT_RATE_FAST : SOFT_RATE_SLOW);
-        softCorrectionUntil.current = Date.now() + 4000;
-      } else if (Date.now() > softCorrectionUntil.current) {
+      } else {
         player.setPlaybackRate(1);
       }
     }, TICK_MS);
