@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RoomState, ServerEvent } from '@/types/room';
 import { serverNow } from '@/lib/sync';
 
-const HARD_CORRECTION_S = 1.0;
+const HARD_CORRECTION_S = 0.3;
 const SOFT_CORRECTION_S = 0.03;
 const TICK_MS = 500;
 const MAX_RATE_DELTA = 0.15;
