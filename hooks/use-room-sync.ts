@@ -112,8 +112,10 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
         isPlaying &&
         lastTime !== null &&
         currentTime - lastTime < expectedAdvance * 0.3;
-      lastTime = currentTime;
-      if (stalled) return;
+      if (stalled) {
+        lastTime = currentTime;
+        return;
+      }
 
       const decision = decideOnTick(s, playerState, currentTime, serverNow(clockOffsetMs));
 
@@ -123,6 +125,7 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       }
 
       applyDecision(player, decision);
+      lastTime = player.getCurrentTime();
     }, TICK_MS);
     return () => clearInterval(id);
   }, [playerReady, audioUnlocked, clockOffsetMs, getPlayer]);
