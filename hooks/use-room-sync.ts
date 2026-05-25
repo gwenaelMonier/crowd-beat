@@ -87,8 +87,18 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
     const id = setInterval(() => {
       const s = stateRef.current;
       const player = getPlayer();
-      if (!s || !player || !s.videoId || !s.isPlaying) return;
-      if (player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+      if (!s || !player || !s.videoId) return;
+
+      const playerState = player.getPlayerState();
+
+      if (!s.isPlaying) {
+        if (playerState === YT.PlayerState.PLAYING) {
+          player.pauseVideo();
+        }
+        return;
+      }
+
+      if (playerState !== YT.PlayerState.PLAYING) return;
 
       const expected = expectedPosition(s, serverNow(clockOffsetMs));
       const actual = player.getCurrentTime();
