@@ -13,10 +13,12 @@ export async function measureClockOffset(samples = 11): Promise<ClockOffset> {
   }
   results.sort((a, b) => a.rttMs - b.rttMs);
   const mid = Math.floor(results.length / 2);
-  const median = results.length % 2 === 0
-    ? { offsetMs: (results[mid - 1].offsetMs + results[mid].offsetMs) / 2, rttMs: (results[mid - 1].rttMs + results[mid].rttMs) / 2 }
-    : results[mid];
-  return { offsetMs: Math.round(median.offsetMs), rttMs: Math.round(median.rttMs) };
+  const medianOffset = results.length % 2 === 0
+    ? (results[mid - 1].offsetMs + results[mid].offsetMs) / 2
+    : results[mid].offsetMs;
+  const best = results.slice(0, Math.max(3, Math.floor(samples / 3)));
+  const avgRtt = best.reduce((s, r) => s + r.rttMs, 0) / best.length;
+  return { offsetMs: Math.round(medianOffset), rttMs: Math.round(avgRtt) };
 }
 
 export function serverNow(offsetMs: number): number {

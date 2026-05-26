@@ -48,7 +48,7 @@ describe('measureClockOffset', () => {
     expect(typeof result.rttMs).toBe('number');
   });
 
-  it('picks median not minimum (robust to outliers)', async () => {
+  it('uses median for offset and average of best for rtt', async () => {
     let call = 0;
     const serverBase = 50_000;
     const scenarios = [
@@ -57,7 +57,6 @@ describe('measureClockOffset', () => {
       { rtt: 20, serverNow: serverBase },
     ];
 
-    const dateNowOriginal = Date.now;
     let fakeNow = 10_000;
 
     vi.spyOn(Date, 'now').mockImplementation(() => fakeNow);
@@ -73,6 +72,7 @@ describe('measureClockOffset', () => {
     });
 
     const result = await measureClockOffset(3);
-    expect(result.rttMs).toBe(20);
+    // sorted by rtt: [2, 20, 100], best 3 → avg rtt = (2+20+100)/3 ≈ 41
+    expect(result.rttMs).toBe(41);
   });
 });
