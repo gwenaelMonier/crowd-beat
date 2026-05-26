@@ -59,8 +59,8 @@ export function Player({ onReady, onStateChange }: Props) {
   }, [mounted]);
 
   return (
-    <div className="aspect-video w-full overflow-hidden rounded-lg bg-black [&_iframe]:!h-full [&_iframe]:!w-full">
-      <div ref={containerRef} className="h-full w-full" />
+    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+      <div ref={containerRef} className="absolute inset-0 [&_iframe]:!h-full [&_iframe]:!w-full" />
     </div>
   );
 }
