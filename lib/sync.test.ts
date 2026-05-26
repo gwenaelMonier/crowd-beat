@@ -48,7 +48,7 @@ describe('measureClockOffset', () => {
     expect(typeof result.rttMs).toBe('number');
   });
 
-  it('uses median for offset and average of best for rtt', async () => {
+  it('uses average of best samples for offset and rtt', async () => {
     let call = 0;
     const serverBase = 50_000;
     const scenarios = [
