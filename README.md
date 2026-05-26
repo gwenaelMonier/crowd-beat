@@ -1,10 +1,12 @@
-# Collective Speaker
+# Crowd Beat 🕺🔊
 
 **https://crowd-beat-theta.vercel.app/**
 
-Collective Speaker lets multiple people listen to the same YouTube video in perfect sync — paste a URL, hit play, and everyone connected hears it at the same time.
-Anyone in the room can control playback: load a new video, play, pause, or seek, and all listeners follow instantly.
-No account needed — just open the page, click to join, and you're part of the collective.
+You're at a party. No speaker. Everyone has a phone.
+
+Open Crowd Beat, paste a YouTube link, and share the room URL. Everyone joins on their own device, hits play at the same time, and all the phones become one collective speaker. The music stays perfectly in sync across every device in the room.
+
+Anyone can take control: swap the track, pause, skip. No app to install, no account to create. Just a link.
 
 ## How it works
 
