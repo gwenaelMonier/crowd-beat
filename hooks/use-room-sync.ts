@@ -77,6 +77,7 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
     if (!player || !state) return;
 
     if (state.videoId && state.videoId !== currentVideoRef.current) {
+      setDriftMs(0);
       const startPos = expectedPosition(state, serverNow(clockOffsetMs));
       player.loadVideoById(state.videoId, Math.max(0, startPos));
       currentVideoRef.current = state.videoId;
@@ -112,6 +113,11 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       const currentTime = player.getCurrentTime();
       const isPlaying = playerState === YT.PlayerState.PLAYING;
 
+      if (s.videoId && s.isPlaying && isPlaying) {
+        const expected = expectedPosition(s, serverNow(clockOffsetMs));
+        setDriftMs(Math.round((expected - currentTime) * 1000));
+      }
+
       if (pendingSeekTarget !== null) {
         if (currentTime >= pendingSeekTarget - 0.1) {
           if (seekIssuedAt !== null) {
@@ -127,11 +133,6 @@ export function useRoomSync(params: UseRoomSyncParams): UseRoomSyncResult {
       }
 
       const decision = decideOnTick(s, playerState, currentTime, serverNow(clockOffsetMs));
-
-      if (s.videoId && s.isPlaying && isPlaying) {
-        const expected = expectedPosition(s, serverNow(clockOffsetMs));
-        setDriftMs(Math.round((expected - currentTime) * 1000));
-      }
 
       if (decision.kind === 'seek') {
         const adjusted = decision.to + seekLatencyMs / 1000;
