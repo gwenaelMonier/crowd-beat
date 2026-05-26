@@ -11,7 +11,7 @@ export function parseVideoId(input: string): string | null {
       const id = url.pathname.slice(1);
       return ID_REGEX.test(id) ? id : null;
     }
-    if (url.hostname.endsWith('youtube.com')) {
+    if (/^(?:www\.|m\.)?youtube\.com$/.test(url.hostname)) {
       if (url.pathname === '/watch') {
         const v = url.searchParams.get('v');
         return v && ID_REGEX.test(v) ? v : null;
