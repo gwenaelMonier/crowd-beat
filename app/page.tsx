@@ -70,7 +70,9 @@ export default function HomePage() {
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <RoomHeader listenerCount={listenerCount} />
 
-      <Player onReady={handlePlayerReady} onStateChange={handlePlayerStateChange} />
+      {audioUnlocked && (
+        <Player onReady={handlePlayerReady} onStateChange={handlePlayerStateChange} />
+      )}
 
       <LoadInput />
 
