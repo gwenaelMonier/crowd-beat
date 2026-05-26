@@ -92,31 +92,30 @@ describe('decideOnTick - drift correction (playing)', () => {
     expect(d).toEqual({ kind: 'setRate', rate: 1 });
   });
 
-  it('noop when drift below soft threshold (30ms)', () => {
-    const d = decideOnTick(PLAYING_AT_10S, PLAYER_PLAYING, 10.02, 11_000);
+  it('noop when drift below soft threshold (10ms)', () => {
+    const d = decideOnTick(PLAYING_AT_10S, PLAYER_PLAYING, 9.995, 11_000);
     expect(d).toEqual({ kind: 'setRate', rate: 1 });
   });
 
   it('soft rate up when ahead expected (drift > 0)', () => {
-    // expected=10, actual=9.9 → drift=+0.1 → rate = 1 + 0.05 = 1.05
+    // expected=10, actual=9.9 → drift=+0.1 → rate = 1 + min(0.15, 0.1*2.0) = 1.15 (capped)
     const d = decideOnTick(PLAYING_AT_10S, PLAYER_PLAYING, 9.9, 11_000);
     expect(d.kind).toBe('setRate');
-    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(1.05, 3);
+    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(1.15, 3);
   });
 
   it('soft rate down when behind expected (drift < 0)', () => {
-    // expected=10, actual=10.1 → drift=-0.1 → rate = 1 - 0.05 = 0.95
+    // expected=10, actual=10.1 → drift=-0.1 → rate = 1 - min(0.15, 0.1*2.0) = 0.85 (capped)
     const d = decideOnTick(PLAYING_AT_10S, PLAYER_PLAYING, 10.1, 11_000);
     expect(d.kind).toBe('setRate');
-    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(0.95, 3);
+    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(0.85, 3);
   });
 
   it('caps rate at MAX_RATE_DELTA (15%)', () => {
-    // drift=+1.0 → would be 1.5 → capped to 1.15. Wait, drift>HARD goes to seek.
-    // Use drift between SOFT and HARD: drift=0.25
+    // drift=+0.25 → 0.25*2.0=0.50 → capped to 0.15 → rate=1.15
     const d = decideOnTick(PLAYING_AT_10S, PLAYER_PLAYING, 9.75, 11_000);
     expect(d.kind).toBe('setRate');
-    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(1.125, 3);
+    if (d.kind === 'setRate') expect(d.rate).toBeCloseTo(1.15, 3);
   });
 
   it('hard seek when drift > HARD threshold (300ms)', () => {

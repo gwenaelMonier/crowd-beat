@@ -86,7 +86,7 @@ export default function HomePage() {
             ? `Now playing: ${state.videoId}`
             : 'Paste a YouTube URL to start the party 🎵'}
         </span>
-        <SyncIndicator driftMs={driftMs} />
+        <SyncIndicator driftMs={driftMs} rttMs={clock?.rttMs ?? null} />
       </div>
 
       {!audioUnlocked && <JoinOverlay onJoin={handleJoin} />}

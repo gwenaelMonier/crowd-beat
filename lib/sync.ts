@@ -1,6 +1,6 @@
 export type ClockOffset = { offsetMs: number; rttMs: number };
 
-export async function measureClockOffset(samples = 5): Promise<ClockOffset> {
+export async function measureClockOffset(samples = 11): Promise<ClockOffset> {
   const results: ClockOffset[] = [];
   for (let i = 0; i < samples; i++) {
     const t0 = Date.now();
@@ -12,7 +12,10 @@ export async function measureClockOffset(samples = 5): Promise<ClockOffset> {
     results.push({ offsetMs, rttMs });
   }
   results.sort((a, b) => a.rttMs - b.rttMs);
-  return results[0];
+  const best = results.slice(0, Math.max(3, Math.floor(samples / 3)));
+  const avgOffset = best.reduce((s, r) => s + r.offsetMs, 0) / best.length;
+  const avgRtt = best.reduce((s, r) => s + r.rttMs, 0) / best.length;
+  return { offsetMs: Math.round(avgOffset), rttMs: Math.round(avgRtt) };
 }
 
 export function serverNow(offsetMs: number): number {
