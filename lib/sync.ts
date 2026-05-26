@@ -14,8 +14,8 @@ export async function measureClockOffset(samples = 11): Promise<ClockOffset> {
   results.sort((a, b) => a.rttMs - b.rttMs);
   const best = results.slice(0, Math.max(3, Math.floor(samples / 3)));
   const avgOffset = best.reduce((s, r) => s + r.offsetMs, 0) / best.length;
-  const avgRtt = best.reduce((s, r) => s + r.rttMs, 0) / best.length;
-  return { offsetMs: Math.round(avgOffset), rttMs: Math.round(avgRtt) };
+  // const avgRtt = best.reduce((s, r) => s + r.rttMs, 0) / best.length;
+  return { offsetMs: Math.round(avgOffset), rttMs: 0 /* Math.round(avgRtt) */ };
 }
 
 export function serverNow(offsetMs: number): number {
