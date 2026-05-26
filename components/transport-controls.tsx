@@ -68,7 +68,7 @@ export function TransportControls({ state, clockOffsetMs, duration }: Props) {
         <span className="font-mono text-sm tabular-nums text-neutral-400">
           {formatTime(current)} / {formatTime(duration)}
         </span>
-        <span className="ml-auto text-xs text-neutral-600">affects all listeners</span>
+        <span className="ml-auto hidden text-xs text-neutral-600 sm:inline">affects all listeners</span>
       </div>
       <Slider
         min={0}

@@ -36,14 +36,15 @@ export function LoadInput() {
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
+          className="flex-1"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Paste a YouTube URL or video ID"
           onKeyDown={(e) => e.key === 'Enter' && submit()}
         />
-        <Button onClick={submit} disabled={loading || !value.trim()}>
+        <Button className="shrink-0" onClick={submit} disabled={loading || !value.trim()}>
           {loading ? 'Loading…' : 'Load for everyone'}
         </Button>
       </div>
