@@ -1,4 +1,9 @@
-import { parsePlaylistId, fetchPlaylistTracks } from '@/lib/youtube-data';
+import {
+  parsePlaylistId,
+  fetchPlaylistTracks,
+  isMixPlaylistId,
+  MAX_PLAYLIST_TRACKS,
+} from '@/lib/youtube-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +24,15 @@ export async function POST(req: Request) {
     if (tracks.length === 0) {
       return Response.json({ error: 'Playlist empty or unavailable' }, { status: 404 });
     }
-    return Response.json({ tracks });
+
+    let notice: string | undefined;
+    if (isMixPlaylistId(playlistId)) {
+      notice = `This is a YouTube Mix/Radio (auto-generated). Imported the first ${tracks.length} tracks — order may be arbitrary. For a fixed order, use a normal playlist URL.`;
+    } else if (tracks.length >= MAX_PLAYLIST_TRACKS) {
+      notice = `Long playlist — imported the first ${MAX_PLAYLIST_TRACKS} tracks only.`;
+    }
+
+    return Response.json({ tracks, notice });
   } catch {
     return Response.json({ error: 'Failed to fetch playlist' }, { status: 502 });
   }

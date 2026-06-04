@@ -8,10 +8,12 @@ import type { PlaylistTrack } from '@/types/room';
 export function PlaylistImport() {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     setError(null);
+    setNotice(null);
     setLoading(true);
     try {
       const res = await fetch('/api/playlist/import', {
@@ -19,7 +21,11 @@ export function PlaylistImport() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ url: value }),
       });
-      const data = (await res.json()) as { tracks?: PlaylistTrack[]; error?: string };
+      const data = (await res.json()) as {
+        tracks?: PlaylistTrack[];
+        error?: string;
+        notice?: string;
+      };
       if (!res.ok || !data.tracks) {
         setError(data.error ?? 'Failed to import playlist');
         return;
@@ -34,6 +40,7 @@ export function PlaylistImport() {
         return;
       }
       setValue('');
+      if (data.notice) setNotice(data.notice);
     } finally {
       setLoading(false);
     }
@@ -54,6 +61,7 @@ export function PlaylistImport() {
         </Button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
+      {notice && <p className="text-sm text-amber-400">{notice}</p>}
     </div>
   );
 }

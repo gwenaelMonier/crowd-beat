@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { parsePlaylistId, fetchPlaylistTracks, MAX_PLAYLIST_TRACKS } from './youtube-data';
+import {
+  parsePlaylistId,
+  fetchPlaylistTracks,
+  isMixPlaylistId,
+  MAX_PLAYLIST_TRACKS,
+} from './youtube-data';
 
 describe('parsePlaylistId', () => {
   it('extracts list param from a watch URL', () => {
@@ -16,6 +21,18 @@ describe('parsePlaylistId', () => {
   });
   it('returns null for empty input', () => {
     expect(parsePlaylistId('   ')).toBeNull();
+  });
+});
+
+describe('isMixPlaylistId', () => {
+  it('flags auto-generated radio/mix ids (RD prefix)', () => {
+    expect(isMixPlaylistId('RD2SEYLu8qSNs')).toBe(true);
+    expect(isMixPlaylistId('RDMMabcdef')).toBe(true);
+    expect(isMixPlaylistId('RDCLAK5uy_xyz')).toBe(true);
+  });
+  it('does not flag normal user playlists', () => {
+    expect(isMixPlaylistId('PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf')).toBe(false);
+    expect(isMixPlaylistId('OLAK5uy_album')).toBe(false);
   });
 });
 

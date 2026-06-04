@@ -17,6 +17,15 @@ export function parsePlaylistId(input: string): string | null {
   return PLAYLIST_ID_REGEX.test(trimmed) ? trimmed : null;
 }
 
+/**
+ * YouTube auto-generated Mix/Radio playlists have ids starting with "RD"
+ * (RD, RDMM, RDCLAK, RDEM, …). They are dynamic and effectively infinite,
+ * unlike normal user playlists ("PL…") or album playlists ("OLAK…").
+ */
+export function isMixPlaylistId(id: string): boolean {
+  return id.startsWith('RD');
+}
+
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 // Upper bound on how many tracks we import from a single playlist. This both
