@@ -3,6 +3,7 @@ import {
   fetchPlaylistTracks,
   isMixPlaylistId,
   MAX_PLAYLIST_TRACKS,
+  YouTubeApiError,
 } from '@/lib/youtube-data';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,24 @@ export async function POST(req: Request) {
     }
 
     return Response.json({ tracks, notice });
-  } catch {
+  } catch (e) {
+    if (e instanceof YouTubeApiError) {
+      if (e.reason === 'quotaExceeded' || e.status === 403) {
+        return Response.json(
+          {
+            error:
+              'YouTube API quota exceeded for today. Try again after the daily reset (midnight Pacific Time) or use another API key.',
+          },
+          { status: 429 },
+        );
+      }
+      if (e.status === 404) {
+        return Response.json(
+          { error: 'Playlist not found, private, or unavailable.' },
+          { status: 404 },
+        );
+      }
+    }
     return Response.json({ error: 'Failed to fetch playlist' }, { status: 502 });
   }
 }

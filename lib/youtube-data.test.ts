@@ -103,6 +103,24 @@ describe('fetchPlaylistTracks', () => {
     await expect(fetchPlaylistTracks('PL123', 'KEY')).rejects.toThrow();
   });
 
+  it('throws a YouTubeApiError carrying the status and reason', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        ({
+          ok: false,
+          status: 403,
+          json: async () => ({
+            error: { message: 'quota exceeded', errors: [{ reason: 'quotaExceeded' }] },
+          }),
+        }) as unknown as Response),
+    );
+    await expect(fetchPlaylistTracks('PL123', 'KEY')).rejects.toMatchObject({
+      status: 403,
+      reason: 'quotaExceeded',
+    });
+  });
+
   it('caps pagination on an endless (radio/mix) playlist instead of looping forever', async () => {
     let playlistItemsCalls = 0;
     const fetchMock = vi.fn(async (input: string | URL) => {

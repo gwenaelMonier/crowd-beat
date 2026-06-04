@@ -28,6 +28,34 @@ export function isMixPlaylistId(id: string): boolean {
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
+/** Error thrown when the YouTube Data API rejects a request, carrying the HTTP
+ *  status and YouTube's machine-readable reason (e.g. "quotaExceeded"). */
+export class YouTubeApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly reason: string | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'YouTubeApiError';
+  }
+}
+
+async function youTubeError(res: Response): Promise<YouTubeApiError> {
+  let reason: string | null = null;
+  let message = `YouTube API request failed (${res.status})`;
+  try {
+    const body = (await res.json()) as {
+      error?: { message?: string; errors?: { reason?: string }[] };
+    };
+    reason = body.error?.errors?.[0]?.reason ?? null;
+    if (body.error?.message) message = body.error.message;
+  } catch {
+    // non-JSON error body — keep defaults
+  }
+  return new YouTubeApiError(res.status, reason, message);
+}
+
 // Upper bound on how many tracks we import from a single playlist. This both
 // keeps a party playlist sane and, critically, prevents an unbounded fetch loop
 // on auto-generated YouTube Mix/Radio playlists (ids starting with "RD"), which
@@ -60,7 +88,7 @@ export async function fetchPlaylistTracks(
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`YouTube playlistItems failed: ${res.status}`);
+    if (!res.ok) throw await youTubeError(res);
     const data = (await res.json()) as PlaylistItemsResponse;
     for (const it of data.items) {
       items.push({ videoId: it.contentDetails.videoId, title: it.snippet.title });
@@ -81,7 +109,7 @@ export async function fetchPlaylistTracks(
     url.searchParams.set('key', apiKey);
 
     const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`YouTube videos failed: ${res.status}`);
+    if (!res.ok) throw await youTubeError(res);
     const data = (await res.json()) as VideosResponse;
     for (const v of data.items) {
       durations.set(v.id, parseIso8601Duration(v.contentDetails.duration));
