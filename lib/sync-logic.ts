@@ -46,6 +46,21 @@ export function decideOnStateChange(
   return { kind: 'noop' };
 }
 
+export function decideDriftCorrection(
+  expectedS: number,
+  playerTimeS: number,
+): SyncDecision {
+  const drift = expectedS - playerTimeS;
+  const abs = Math.abs(drift);
+
+  if (abs > HARD_CORRECTION_S) return { kind: 'seek', to: expectedS };
+  if (abs > SOFT_CORRECTION_S) {
+    const delta = Math.min(MAX_RATE_DELTA, abs * RATE_GAIN);
+    return { kind: 'setRate', rate: drift > 0 ? 1 + delta : 1 - delta };
+  }
+  return { kind: 'setRate', rate: 1 };
+}
+
 /**
  * Decide drift correction on each periodic tick.
  */
@@ -66,14 +81,5 @@ export function decideOnTick(
 
   if (playerState !== PLAYER_PLAYING) return { kind: 'noop' };
 
-  const expected = expectedPosition(state, serverNowMs);
-  const drift = expected - playerTimeS;
-  const abs = Math.abs(drift);
-
-  if (abs > HARD_CORRECTION_S) return { kind: 'seek', to: expected };
-  if (abs > SOFT_CORRECTION_S) {
-    const delta = Math.min(MAX_RATE_DELTA, abs * RATE_GAIN);
-    return { kind: 'setRate', rate: drift > 0 ? 1 + delta : 1 - delta };
-  }
-  return { kind: 'setRate', rate: 1 };
+  return decideDriftCorrection(expectedPosition(state, serverNowMs), playerTimeS);
 }

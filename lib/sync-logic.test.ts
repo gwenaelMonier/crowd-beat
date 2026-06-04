@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   decideOnStateChange,
+  decideDriftCorrection,
   decideOnTick,
   expectedPosition,
   PLAYER_PAUSED,
@@ -128,5 +129,24 @@ describe('decideOnTick - drift correction (playing)', () => {
     // state says playing but player is paused → decideOnStateChange would handle this,
     // tick is just for drift correction and does nothing
     expect(d).toEqual({ kind: 'noop' });
+  });
+});
+
+describe('decideDriftCorrection', () => {
+  it('hard-seeks when drift exceeds the hard threshold', () => {
+    expect(decideDriftCorrection(10, 9)).toEqual({ kind: 'seek', to: 10 });
+  });
+  it('speeds up when slightly behind', () => {
+    const d = decideDriftCorrection(10, 9.95);
+    expect(d.kind).toBe('setRate');
+    if (d.kind === 'setRate') expect(d.rate).toBeGreaterThan(1);
+  });
+  it('slows down when slightly ahead', () => {
+    const d = decideDriftCorrection(10, 10.05);
+    expect(d.kind).toBe('setRate');
+    if (d.kind === 'setRate') expect(d.rate).toBeLessThan(1);
+  });
+  it('returns to normal rate when in sync', () => {
+    expect(decideDriftCorrection(10, 10)).toEqual({ kind: 'setRate', rate: 1 });
   });
 });
