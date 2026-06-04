@@ -167,4 +167,32 @@ describe('computeNextPlaylistState', () => {
     if (result.kind !== 'ok') return;
     expect(result.next.positionAtStart).toBe(0);
   });
+
+  it('seek sets the global timeline position and keeps the playing state', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'seek', position: 175 }, NOW);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.positionAtStart).toBe(175);
+    expect(result.next.startedAt).toBe(NOW);
+    expect(result.next.isPlaying).toBe(true);
+  });
+
+  it('seek keeps a paused playlist paused', () => {
+    const paused: PlaylistState = {
+      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 10, updatedAt: 5_000,
+    };
+    const result = computeNextPlaylistState(paused, { action: 'seek', position: 60 }, NOW);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.positionAtStart).toBe(60);
+    expect(result.next.isPlaying).toBe(false);
+  });
+
+  it('seek clamps below 0 and beyond the total duration', () => {
+    const lo = computeNextPlaylistState(PLAYING, { action: 'seek', position: -20 }, NOW);
+    const hi = computeNextPlaylistState(PLAYING, { action: 'seek', position: 9999 }, NOW);
+    if (lo.kind !== 'ok' || hi.kind !== 'ok') throw new Error('expected ok');
+    expect(lo.next.positionAtStart).toBe(0);
+    expect(hi.next.positionAtStart).toBe(350); // total duration
+  });
 });

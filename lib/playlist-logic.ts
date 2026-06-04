@@ -159,5 +159,13 @@ export function computeNextPlaylistState(
         },
       };
     }
+    case 'seek': {
+      const total = totalDuration(current.tracks);
+      const position = Math.max(0, Math.min(action.position, total));
+      return {
+        kind: 'ok',
+        next: { ...current, positionAtStart: position, startedAt: now, updatedAt: now },
+      };
+    }
   }
 }

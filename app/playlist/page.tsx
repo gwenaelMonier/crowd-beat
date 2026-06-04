@@ -7,6 +7,7 @@ import { RoomHeader } from '@/components/room-header';
 import { SyncIndicator } from '@/components/sync-indicator';
 import { PlaylistImport } from '@/components/playlist-import';
 import { PlaylistControls } from '@/components/playlist-controls';
+import { PlaylistSeekBar } from '@/components/playlist-seekbar';
 import { PlaylistTracklist } from '@/components/playlist-tracklist';
 import { useServerClock } from '@/hooks/use-server-clock';
 import { usePlaylistSync } from '@/hooks/use-playlist-sync';
@@ -65,6 +66,8 @@ export default function PlaylistPage() {
           </div>
 
           <PlaylistControls isPlaying={!!state?.isPlaying && !ended} hasPlaylist={hasPlaylist} />
+
+          <PlaylistSeekBar state={state} clockOffsetMs={clockOffsetMs} />
 
           <PlaylistTracklist tracks={tracks} currentIndex={index} offsetS={offsetS} />
         </>

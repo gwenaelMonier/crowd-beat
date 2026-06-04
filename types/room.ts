@@ -41,7 +41,8 @@ export type PlaylistAction =
   | { action: 'pause' }
   | { action: 'next' }
   | { action: 'prev' }
-  | { action: 'seekToTrack'; index: number };
+  | { action: 'seekToTrack'; index: number }
+  | { action: 'seek'; position: number };
 
 export type PlaylistServerEvent =
   | { type: 'state'; state: PlaylistState }
