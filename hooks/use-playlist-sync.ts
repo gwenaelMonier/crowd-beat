@@ -31,7 +31,7 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
   const [driftMs, setDriftMs] = useState(0);
   const [resolved, setResolved] = useState({ index: 0, offsetS: 0, ended: false });
   const stateRef = useRef<PlaylistState | null>(null);
-  const currentVideoRef = useRef<string | null>(null);
+  const currentTrackRef = useRef<{ index: number; videoId: string } | null>(null);
 
   stateRef.current = state;
 
@@ -70,12 +70,15 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
       if (!track) return;
 
       // New track (auto-advance, seek, or first load): load it at the right offset.
-      if (track.videoId !== currentVideoRef.current) {
+      // Identify the track by (index, videoId) so a repeated videoId at a different
+      // position still counts as a track change.
+      const current = currentTrackRef.current;
+      if (current?.index !== pos.index || current?.videoId !== track.videoId) {
         setDriftMs(0);
         pendingSeekTarget = null;
         seekIssuedAt = null;
         player.loadVideoById(track.videoId, Math.max(0, pos.offsetS));
-        currentVideoRef.current = track.videoId;
+        currentTrackRef.current = { index: pos.index, videoId: track.videoId };
         return;
       }
 
