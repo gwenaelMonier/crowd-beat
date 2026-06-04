@@ -1,4 +1,4 @@
-import type { PlaylistState, PlaylistTrack } from '@/types/room';
+import type { PlaylistState, PlaylistTrack, PlaylistAction } from '@/types/room';
 
 export function parseIso8601Duration(iso: string): number {
   const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso);
@@ -55,4 +55,109 @@ export function resolvePlaylistPosition(
     acc += d;
   }
   return { index: last, offsetS: tracks[last].durationS, ended: true };
+}
+
+export type PlaylistControlResult =
+  | { kind: 'ok'; next: PlaylistState }
+  | { kind: 'error'; status: number; message: string };
+
+export function computeNextPlaylistState(
+  current: PlaylistState,
+  action: PlaylistAction,
+  now: number,
+): PlaylistControlResult {
+  switch (action.action) {
+    case 'loadPlaylist': {
+      if (action.tracks.length === 0) {
+        return { kind: 'error', status: 400, message: 'Empty playlist' };
+      }
+      return {
+        kind: 'ok',
+        next: {
+          tracks: action.tracks,
+          isPlaying: true,
+          startedAt: now,
+          positionAtStart: 0,
+          updatedAt: now,
+        },
+      };
+    }
+    case 'play': {
+      if (current.tracks.length === 0) {
+        return { kind: 'error', status: 400, message: 'No playlist loaded' };
+      }
+      if (current.isPlaying) return { kind: 'ok', next: current };
+      return {
+        kind: 'ok',
+        next: { ...current, isPlaying: true, startedAt: now, updatedAt: now },
+      };
+    }
+    case 'pause': {
+      return {
+        kind: 'ok',
+        next: {
+          ...current,
+          isPlaying: false,
+          positionAtStart: expectedPlaylistPosition(current, now),
+          startedAt: now,
+          updatedAt: now,
+        },
+      };
+    }
+    case 'seekToTrack': {
+      if (action.index < 0 || action.index >= current.tracks.length) {
+        return { kind: 'error', status: 400, message: 'Track index out of range' };
+      }
+      return {
+        kind: 'ok',
+        next: {
+          ...current,
+          positionAtStart: trackStartOffset(current.tracks, action.index),
+          startedAt: now,
+          isPlaying: true,
+          updatedAt: now,
+        },
+      };
+    }
+    case 'next': {
+      const { index } = resolvePlaylistPosition(current, now);
+      const target = index + 1;
+      if (target >= current.tracks.length) {
+        return {
+          kind: 'ok',
+          next: {
+            ...current,
+            isPlaying: false,
+            positionAtStart: totalDuration(current.tracks),
+            startedAt: now,
+            updatedAt: now,
+          },
+        };
+      }
+      return {
+        kind: 'ok',
+        next: {
+          ...current,
+          positionAtStart: trackStartOffset(current.tracks, target),
+          startedAt: now,
+          isPlaying: true,
+          updatedAt: now,
+        },
+      };
+    }
+    case 'prev': {
+      const { index } = resolvePlaylistPosition(current, now);
+      const target = Math.max(0, index - 1);
+      return {
+        kind: 'ok',
+        next: {
+          ...current,
+          positionAtStart: trackStartOffset(current.tracks, target),
+          startedAt: now,
+          isPlaying: true,
+          updatedAt: now,
+        },
+      };
+    }
+  }
 }

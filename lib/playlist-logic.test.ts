@@ -6,7 +6,8 @@ import {
   resolvePlaylistPosition,
   trackStartOffset,
 } from './playlist-logic';
-import type { PlaylistState } from '@/types/room';
+import { computeNextPlaylistState } from './playlist-logic';
+import type { PlaylistState, PlaylistAction } from '@/types/room';
 
 describe('parseIso8601Duration', () => {
   it('parses minutes and seconds', () => {
@@ -93,5 +94,77 @@ describe('resolvePlaylistPosition', () => {
     expect(resolvePlaylistPosition(empty, 5_000)).toEqual({
       index: 0, offsetS: 0, ended: true,
     });
+  });
+});
+
+const NOW = 10_000;
+
+describe('computeNextPlaylistState', () => {
+  it('loads a playlist starting at position 0 and playing', () => {
+    const empty: PlaylistState = {
+      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0,
+    };
+    const action: PlaylistAction = { action: 'loadPlaylist', tracks: TRACKS };
+    const result = computeNextPlaylistState(empty, action, NOW);
+    expect(result).toEqual({
+      kind: 'ok',
+      next: { tracks: TRACKS, isPlaying: true, startedAt: NOW, positionAtStart: 0, updatedAt: NOW },
+    });
+  });
+  it('rejects an empty playlist load', () => {
+    const empty: PlaylistState = {
+      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0,
+    };
+    const result = computeNextPlaylistState(empty, { action: 'loadPlaylist', tracks: [] }, NOW);
+    expect(result.kind).toBe('error');
+  });
+  it('pause freezes the current global position', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'pause' }, 31_000);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.isPlaying).toBe(false);
+    expect(result.next.positionAtStart).toBeCloseTo(30);
+  });
+  it('play resumes from the frozen position', () => {
+    const paused: PlaylistState = {
+      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 42, updatedAt: 5_000,
+    };
+    const result = computeNextPlaylistState(paused, { action: 'play' }, NOW);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next).toEqual({
+      tracks: TRACKS, isPlaying: true, startedAt: NOW, positionAtStart: 42, updatedAt: NOW,
+    });
+  });
+  it('seekToTrack jumps to the track start offset', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'seekToTrack', index: 2 }, NOW);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.positionAtStart).toBe(300);
+    expect(result.next.isPlaying).toBe(true);
+  });
+  it('seekToTrack rejects an out-of-range index', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'seekToTrack', index: 9 }, NOW);
+    expect(result.kind).toBe('error');
+  });
+  it('next advances to the following track', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'next' }, 31_000);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.positionAtStart).toBe(100);
+    expect(result.next.isPlaying).toBe(true);
+  });
+  it('next on the last track stops at the end', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'next' }, 321_000);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.isPlaying).toBe(false);
+    expect(result.next.positionAtStart).toBe(350);
+  });
+  it('prev goes to the previous track, floored at 0', () => {
+    const result = computeNextPlaylistState(PLAYING, { action: 'prev' }, 151_000);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.next.positionAtStart).toBe(0);
   });
 });
