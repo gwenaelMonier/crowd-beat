@@ -1,0 +1,80 @@
+import type { PlaylistTrack } from '@/types/room';
+import { parseIso8601Duration } from '@/lib/playlist-logic';
+
+const PLAYLIST_ID_REGEX = /^[A-Za-z0-9_-]+$/;
+
+export function parsePlaylistId(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    const list = url.searchParams.get('list');
+    if (list && PLAYLIST_ID_REGEX.test(list)) return list;
+    return null;
+  } catch {
+    // not a URL — fall through to raw-id check
+  }
+  return PLAYLIST_ID_REGEX.test(trimmed) ? trimmed : null;
+}
+
+const API_BASE = 'https://www.googleapis.com/youtube/v3';
+
+type PlaylistItemsResponse = {
+  nextPageToken?: string;
+  items: { contentDetails: { videoId: string }; snippet: { title: string } }[];
+};
+
+type VideosResponse = {
+  items: { id: string; contentDetails: { duration: string } }[];
+};
+
+export async function fetchPlaylistTracks(
+  playlistId: string,
+  apiKey: string,
+): Promise<PlaylistTrack[]> {
+  // 1. Collect video ids + titles, following pagination.
+  const items: { videoId: string; title: string }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL(`${API_BASE}/playlistItems`);
+    url.searchParams.set('part', 'snippet,contentDetails');
+    url.searchParams.set('maxResults', '50');
+    url.searchParams.set('playlistId', playlistId);
+    url.searchParams.set('key', apiKey);
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`YouTube playlistItems failed: ${res.status}`);
+    const data = (await res.json()) as PlaylistItemsResponse;
+    for (const it of data.items) {
+      items.push({ videoId: it.contentDetails.videoId, title: it.snippet.title });
+    }
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  // 2. Resolve durations in batches of 50.
+  const durations = new Map<string, number>();
+  for (let i = 0; i < items.length; i += 50) {
+    const batch = items.slice(i, i + 50);
+    const url = new URL(`${API_BASE}/videos`);
+    url.searchParams.set('part', 'contentDetails');
+    url.searchParams.set('id', batch.map((b) => b.videoId).join(','));
+    url.searchParams.set('key', apiKey);
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`YouTube videos failed: ${res.status}`);
+    const data = (await res.json()) as VideosResponse;
+    for (const v of data.items) {
+      durations.set(v.id, parseIso8601Duration(v.contentDetails.duration));
+    }
+  }
+
+  // 3. Build tracks in playlist order, dropping unavailable videos.
+  return items
+    .filter((it) => durations.has(it.videoId))
+    .map((it) => ({
+      videoId: it.videoId,
+      title: it.title,
+      durationS: durations.get(it.videoId)!,
+    }));
+}
