@@ -69,16 +69,20 @@ export default function PlaylistPage() {
 
           <PlaylistSeekBar state={state} clockOffsetMs={clockOffsetMs} />
 
+          <div className="flex justify-end">
+            <SyncIndicator driftMs={driftMs} rttMs={clock?.rttMs ?? null} />
+          </div>
+
           <PlaylistTracklist tracks={tracks} currentIndex={index} offsetS={offsetS} />
         </>
       )}
 
-      <div className="flex flex-col gap-1 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
-        <span className="truncate">
-          {hasPlaylist ? '' : 'Paste a YouTube playlist URL to start the party 🎵'}
-        </span>
-        <SyncIndicator driftMs={driftMs} rttMs={clock?.rttMs ?? null} />
-      </div>
+      {!hasPlaylist && (
+        <div className="flex flex-col gap-1 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
+          <span className="truncate">Paste a YouTube playlist URL to start the party 🎵</span>
+          <SyncIndicator driftMs={driftMs} rttMs={clock?.rttMs ?? null} />
+        </div>
+      )}
 
       {!audioUnlocked && <JoinOverlay onJoin={handleJoin} />}
     </main>
