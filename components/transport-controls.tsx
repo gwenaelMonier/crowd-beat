@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import type { RoomState } from '@/types/room';
@@ -52,8 +53,9 @@ export function TransportControls({ state, clockOffsetMs, duration }: Props) {
     <div className="flex w-full flex-col gap-3">
       <div className="flex items-center gap-3">
         <Button
-          variant="secondary"
+          size="icon"
           disabled={disabled}
+          aria-label={state?.isPlaying ? 'Pause' : 'Play'}
           onClick={() => {
             if (!state) return;
             if (state.isPlaying) {
@@ -63,7 +65,7 @@ export function TransportControls({ state, clockOffsetMs, duration }: Props) {
             }
           }}
         >
-          {state?.isPlaying ? 'Pause' : 'Play'}
+          {state?.isPlaying ? <Pause className="size-5" /> : <Play className="size-5" />}
         </Button>
         <span className="font-mono text-sm tabular-nums text-neutral-400">
           {formatTime(current)} / {formatTime(duration)}
