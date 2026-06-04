@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { parsePlaylistId, fetchPlaylistTracks } from './youtube-data';
+import { parsePlaylistId, fetchPlaylistTracks, MAX_PLAYLIST_TRACKS } from './youtube-data';
 
 describe('parsePlaylistId', () => {
   it('extracts list param from a watch URL', () => {
@@ -84,5 +84,39 @@ describe('fetchPlaylistTracks', () => {
   it('throws when the API responds with an error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 403 }) as Response));
     await expect(fetchPlaylistTracks('PL123', 'KEY')).rejects.toThrow();
+  });
+
+  it('caps pagination on an endless (radio/mix) playlist instead of looping forever', async () => {
+    let playlistItemsCalls = 0;
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = new URL(input.toString());
+      if (url.pathname.endsWith('/playlistItems')) {
+        playlistItemsCalls++;
+        // Safety guard: a correct implementation must stop long before this.
+        // Without a cap, the do/while loop would call this forever.
+        if (playlistItemsCalls > 50) {
+          throw new Error('infinite pagination — cap not enforced');
+        }
+        // Always return a full page WITH a nextPageToken → endless, like an RD mix.
+        const items = Array.from({ length: 50 }, (_, i) => {
+          const n = (playlistItemsCalls - 1) * 50 + i;
+          return {
+            contentDetails: { videoId: `vid${String(n).padStart(8, '0')}` },
+            snippet: { title: `T${n}` },
+          };
+        });
+        return jsonResponse({ nextPageToken: `tok${playlistItemsCalls}`, items });
+      }
+      // /videos — return a duration for every requested id
+      const ids = (url.searchParams.get('id') ?? '').split(',').filter(Boolean);
+      return jsonResponse({
+        items: ids.map((id) => ({ id, contentDetails: { duration: 'PT1M' } })),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const tracks = await fetchPlaylistTracks('RDmix', 'KEY');
+    expect(tracks.length).toBe(MAX_PLAYLIST_TRACKS);
+    expect(playlistItemsCalls).toBe(MAX_PLAYLIST_TRACKS / 50);
   });
 });

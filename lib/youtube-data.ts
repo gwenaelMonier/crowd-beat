@@ -19,6 +19,13 @@ export function parsePlaylistId(input: string): string | null {
 
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
+// Upper bound on how many tracks we import from a single playlist. This both
+// keeps a party playlist sane and, critically, prevents an unbounded fetch loop
+// on auto-generated YouTube Mix/Radio playlists (ids starting with "RD"), which
+// paginate endlessly — every page returns a fresh nextPageToken, so without a
+// cap the import request never resolves.
+export const MAX_PLAYLIST_TRACKS = 200;
+
 type PlaylistItemsResponse = {
   nextPageToken?: string;
   items: { contentDetails: { videoId: string }; snippet: { title: string } }[];
@@ -50,7 +57,10 @@ export async function fetchPlaylistTracks(
       items.push({ videoId: it.contentDetails.videoId, title: it.snippet.title });
     }
     pageToken = data.nextPageToken;
-  } while (pageToken);
+  } while (pageToken && items.length < MAX_PLAYLIST_TRACKS);
+
+  // Cap the playlist so an endless Mix/Radio (or a huge playlist) stays bounded.
+  if (items.length > MAX_PLAYLIST_TRACKS) items.length = MAX_PLAYLIST_TRACKS;
 
   // 2. Resolve durations in batches of 50.
   const durations = new Map<string, number>();
