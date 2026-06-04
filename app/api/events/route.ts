@@ -6,5 +6,5 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 export async function GET() {
-  return createRoomStream({ listenerPrefix: LISTENER_PREFIX, getState });
+  return await createRoomStream({ listenerPrefix: LISTENER_PREFIX, getState });
 }

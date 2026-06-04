@@ -26,9 +26,10 @@ async function countListeners(prefix: string): Promise<number> {
   return total;
 }
 
-export function createRoomStream({ listenerPrefix, getState }: RoomStreamOptions): Response {
+export async function createRoomStream({ listenerPrefix, getState }: RoomStreamOptions): Promise<Response> {
   const connId = crypto.randomUUID();
   const listenerKey = `${listenerPrefix}${connId}`;
+  await redis.set(listenerKey, '1', { ex: LISTENER_TTL_SECONDS });
   const encoder = new TextEncoder();
   let closed = false;
   let lastStateJson = '';
@@ -36,8 +37,6 @@ export function createRoomStream({ listenerPrefix, getState }: RoomStreamOptions
 
   const stream = new ReadableStream({
     async start(controller) {
-      await redis.set(listenerKey, '1', { ex: LISTENER_TTL_SECONDS });
-
       const send = (event: unknown) => {
         if (closed) return;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
