@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PlaylistState, PlaylistServerEvent } from '@/types/room';
 import { serverNow } from '@/lib/sync';
-import { resolvePlaylistPosition } from '@/lib/playlist-logic';
+import {
+  resolvePlaylistPosition,
+  isFatalPlayerError,
+  skipActionForUnavailable,
+} from '@/lib/playlist-logic';
 import { decideDriftCorrection } from '@/lib/sync-logic';
 
 const TICK_MS = 500;
@@ -22,6 +26,10 @@ export type UsePlaylistSyncResult = {
   index: number;
   offsetS: number;
   ended: boolean;
+  /** Title of a track YouTube refused to play (region/embed block); we skip it. */
+  unavailableTitle: string | null;
+  /** Pass to <Player onError> — auto-advances the shared timeline past a dead video. */
+  handlePlayerError: (code: number) => void;
 };
 
 export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncResult {
@@ -30,10 +38,36 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
   const [listenerCount, setListenerCount] = useState(0);
   const [driftMs, setDriftMs] = useState(0);
   const [resolved, setResolved] = useState({ index: 0, offsetS: 0, ended: false });
+  const [unavailableTitle, setUnavailableTitle] = useState<string | null>(null);
   const stateRef = useRef<PlaylistState | null>(null);
   const currentTrackRef = useRef<{ index: number; videoId: string } | null>(null);
+  // Track we've already broadcast a skip for, so repeated error events (and other
+  // clients' errors landing back as state) don't post the skip again.
+  const handledErrorKeyRef = useRef<string | null>(null);
+  const unavailableIndexRef = useRef<number | null>(null);
 
   stateRef.current = state;
+
+  // When YouTube refuses the current video (removed, embedding disabled, or a
+  // region/licence block that the Data API doesn't expose), advance the shared
+  // timeline past it. A client can't skip locally without desyncing, so the skip
+  // is global; the absolute-index jump keeps concurrent skips idempotent.
+  const handlePlayerError = useCallback((code: number) => {
+    if (!isFatalPlayerError(code)) return;
+    const s = stateRef.current;
+    const loaded = currentTrackRef.current;
+    if (!s || !loaded) return;
+    const key = `${loaded.index}:${loaded.videoId}`;
+    if (handledErrorKeyRef.current === key) return;
+    handledErrorKeyRef.current = key;
+    unavailableIndexRef.current = loaded.index;
+    setUnavailableTitle(s.tracks[loaded.index]?.title ?? null);
+    void fetch('/api/playlist/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(skipActionForUnavailable(loaded.index, s.tracks.length)),
+    });
+  }, []);
 
   // Subscribe to playlist room events.
   useEffect(() => {
@@ -66,6 +100,17 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
       const now = serverNow(clockOffsetMs);
       const pos = resolvePlaylistPosition(s, now);
       setResolved(pos);
+
+      // Once the timeline has moved off a track we flagged unavailable (or the
+      // playlist ended because its last track was the dead one), drop the notice.
+      if (
+        unavailableIndexRef.current !== null &&
+        (pos.index !== unavailableIndexRef.current || pos.ended)
+      ) {
+        unavailableIndexRef.current = null;
+        setUnavailableTitle(null);
+      }
+
       const track = s.tracks[pos.index];
       if (!track) return;
 
@@ -77,6 +122,8 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
         setDriftMs(0);
         pendingSeekTarget = null;
         seekIssuedAt = null;
+        // Fresh load → allow this track to report (and skip on) its own error.
+        handledErrorKeyRef.current = null;
         player.loadVideoById(track.videoId, Math.max(0, pos.offsetS));
         currentTrackRef.current = { index: pos.index, videoId: track.videoId };
         return;
@@ -139,5 +186,7 @@ export function usePlaylistSync(params: UsePlaylistSyncParams): UsePlaylistSyncR
     index: resolved.index,
     offsetS: resolved.offsetS,
     ended: resolved.ended,
+    unavailableTitle,
+    handlePlayerError,
   };
 }

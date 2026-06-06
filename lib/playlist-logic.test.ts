@@ -7,7 +7,29 @@ import {
   trackStartOffset,
 } from './playlist-logic';
 import { computeNextPlaylistState } from './playlist-logic';
+import { isFatalPlayerError, skipActionForUnavailable } from './playlist-logic';
 import type { PlaylistState, PlaylistAction } from '@/types/room';
+
+describe('isFatalPlayerError', () => {
+  it('treats unavailable / not-embeddable codes as fatal', () => {
+    for (const code of [2, 5, 100, 101, 150]) {
+      expect(isFatalPlayerError(code)).toBe(true);
+    }
+  });
+  it('ignores non-error codes', () => {
+    expect(isFatalPlayerError(0)).toBe(false);
+    expect(isFatalPlayerError(1)).toBe(false);
+  });
+});
+
+describe('skipActionForUnavailable', () => {
+  it('jumps to the next track by absolute index (idempotent across clients)', () => {
+    expect(skipActionForUnavailable(3, 10)).toEqual({ action: 'seekToTrack', index: 4 });
+  });
+  it('ends the playlist when the last track is unavailable', () => {
+    expect(skipActionForUnavailable(9, 10)).toEqual({ action: 'next' });
+  });
+});
 
 describe('parseIso8601Duration', () => {
   it('parses minutes and seconds', () => {

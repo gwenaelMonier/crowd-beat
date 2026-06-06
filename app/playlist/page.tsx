@@ -26,12 +26,13 @@ export default function PlaylistPage() {
     setPlayerReady(true);
   }, []);
 
-  const { state, listenerCount, driftMs, index, offsetS, ended } = usePlaylistSync({
-    clockOffsetMs,
-    getPlayer,
-    playerReady,
-    audioUnlocked,
-  });
+  const { state, listenerCount, driftMs, index, offsetS, ended, unavailableTitle, handlePlayerError } =
+    usePlaylistSync({
+      clockOffsetMs,
+      getPlayer,
+      playerReady,
+      audioUnlocked,
+    });
 
   const tracks = state?.tracks ?? [];
   const hasPlaylist = tracks.length > 0;
@@ -50,7 +51,7 @@ export default function PlaylistPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <RoomHeader listenerCount={listenerCount} />
 
-      <Player onReady={handlePlayerReady} />
+      <Player onReady={handlePlayerReady} onError={handlePlayerError} />
 
       <PlaylistImport />
 
@@ -63,6 +64,11 @@ export default function PlaylistPage() {
             <span className="text-xs text-neutral-500">
               Track {Math.min(index + 1, tracks.length)} / {tracks.length}
             </span>
+            {unavailableTitle && (
+              <span className="text-xs text-amber-400">
+                « {unavailableTitle} » is unavailable here — skipping.
+              </span>
+            )}
           </div>
 
           <PlaylistControls isPlaying={!!state?.isPlaying && !ended} hasPlaylist={hasPlaylist} />

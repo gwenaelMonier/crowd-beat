@@ -6,15 +6,18 @@ import { loadYouTubeApi } from '@/lib/youtube-iframe';
 type Props = {
   onReady: (player: YT.Player) => void;
   onStateChange?: (player: YT.Player, playerState: number) => void;
+  onError?: (code: number) => void;
 };
 
-export function Player({ onReady, onStateChange }: Props) {
+export function Player({ onReady, onStateChange, onError }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const onStateChangeRef = useRef(onStateChange);
+  const onErrorRef = useRef(onError);
   const [mounted, setMounted] = useState(false);
 
   onStateChangeRef.current = onStateChange;
+  onErrorRef.current = onError;
 
   useEffect(() => {
     setMounted(true);
@@ -46,6 +49,7 @@ export function Player({ onReady, onStateChange }: Props) {
             onReady(e.target);
           },
           onStateChange: (e) => onStateChangeRef.current?.(e.target, e.data),
+          onError: (e) => onErrorRef.current?.(e.data),
         },
       });
     });

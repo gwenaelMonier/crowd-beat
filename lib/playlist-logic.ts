@@ -57,6 +57,28 @@ export function resolvePlaylistPosition(
   return { index: last, offsetS: tracks[last].durationS, ended: true };
 }
 
+// YouTube IFrame onError codes that mean the current video can't play here:
+// 2 invalid id, 5 HTML5 error, 100 removed/private, 101/150 embedding disabled.
+// Region/licence (Content-ID) blocks also surface as 150 at playback time even
+// when the Data API reports the video as embeddable.
+const FATAL_PLAYER_ERROR_CODES = new Set([2, 5, 100, 101, 150]);
+
+export function isFatalPlayerError(code: number): boolean {
+  return FATAL_PLAYER_ERROR_CODES.has(code);
+}
+
+/**
+ * Action to broadcast when the track at `index` can't be played. Jumps to the
+ * next track by ABSOLUTE index so that if several clients error on the same
+ * track at once they all post the identical target (idempotent — no
+ * compound-skipping). When the last track is unavailable, `next` ends cleanly.
+ */
+export function skipActionForUnavailable(index: number, trackCount: number): PlaylistAction {
+  return index + 1 < trackCount
+    ? { action: 'seekToTrack', index: index + 1 }
+    : { action: 'next' };
+}
+
 export type PlaylistControlResult =
   | { kind: 'ok'; next: PlaylistState }
   | { kind: 'error'; status: number; message: string };
