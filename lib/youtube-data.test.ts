@@ -4,6 +4,7 @@ import {
   fetchPlaylistTracks,
   isMixPlaylistId,
   MAX_PLAYLIST_TRACKS,
+  MAX_MIX_TRACKS,
 } from './youtube-data';
 
 describe('parsePlaylistId', () => {
@@ -121,37 +122,58 @@ describe('fetchPlaylistTracks', () => {
     });
   });
 
-  it('caps pagination on an endless (radio/mix) playlist instead of looping forever', async () => {
-    let playlistItemsCalls = 0;
-    const fetchMock = vi.fn(async (input: string | URL) => {
+  // Builds a fetch mock that serves `total` playlist items across pages of 50,
+  // each video resolving to a 1-minute duration. If `total` is null the stream
+  // is endless (every page carries a nextPageToken) — like an RD mix. `guard`
+  // throws if pagination runs away, so an unbounded loop fails loudly.
+  function paginatedFetch(total: number | null, guard: number) {
+    let calls = 0;
+    return vi.fn(async (input: string | URL) => {
       const url = new URL(input.toString());
       if (url.pathname.endsWith('/playlistItems')) {
-        playlistItemsCalls++;
-        // Safety guard: a correct implementation must stop long before this.
-        // Without a cap, the do/while loop would call this forever.
-        if (playlistItemsCalls > 50) {
-          throw new Error('infinite pagination — cap not enforced');
-        }
-        // Always return a full page WITH a nextPageToken → endless, like an RD mix.
-        const items = Array.from({ length: 50 }, (_, i) => {
-          const n = (playlistItemsCalls - 1) * 50 + i;
+        calls++;
+        if (calls > guard) throw new Error('pagination cap not enforced');
+        const start = (calls - 1) * 50;
+        const count = total === null ? 50 : Math.min(50, total - start);
+        const items = Array.from({ length: count }, (_, i) => {
+          const n = start + i;
           return {
             contentDetails: { videoId: `vid${String(n).padStart(8, '0')}` },
             snippet: { title: `T${n}` },
           };
         });
-        return jsonResponse({ nextPageToken: `tok${playlistItemsCalls}`, items });
+        const hasMore = total === null || start + count < total;
+        return jsonResponse(hasMore ? { nextPageToken: `tok${calls}`, items } : { items });
       }
-      // /videos — return a duration for every requested id
       const ids = (url.searchParams.get('id') ?? '').split(',').filter(Boolean);
       return jsonResponse({
         items: ids.map((id) => ({ id, contentDetails: { duration: 'PT1M' } })),
       });
     });
+  }
+
+  it('caps an endless (radio/mix) playlist at MAX_MIX_TRACKS instead of looping forever', async () => {
+    const fetchMock = paginatedFetch(null, 50);
     vi.stubGlobal('fetch', fetchMock);
 
     const tracks = await fetchPlaylistTracks('RDmix', 'KEY');
+    expect(tracks.length).toBe(MAX_MIX_TRACKS);
+  });
+
+  it('does NOT truncate a normal (PL) playlist at the mix limit', async () => {
+    // A 260-track playlist must import all 260 — the mix cap must not apply.
+    const fetchMock = paginatedFetch(260, 50);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const tracks = await fetchPlaylistTracks('PLnormal', 'KEY');
+    expect(tracks.length).toBe(260);
+  });
+
+  it('still bounds a pathologically endless normal playlist at MAX_PLAYLIST_TRACKS', async () => {
+    const fetchMock = paginatedFetch(null, MAX_PLAYLIST_TRACKS / 50 + 5);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const tracks = await fetchPlaylistTracks('PLendless', 'KEY');
     expect(tracks.length).toBe(MAX_PLAYLIST_TRACKS);
-    expect(playlistItemsCalls).toBe(MAX_PLAYLIST_TRACKS / 50);
   });
 });

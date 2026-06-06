@@ -56,12 +56,16 @@ async function youTubeError(res: Response): Promise<YouTubeApiError> {
   return new YouTubeApiError(res.status, reason, message);
 }
 
-// Upper bound on how many tracks we import from a single playlist. This both
-// keeps a party playlist sane and, critically, prevents an unbounded fetch loop
-// on auto-generated YouTube Mix/Radio playlists (ids starting with "RD"), which
-// paginate endlessly — every page returns a fresh nextPageToken, so without a
-// cap the import request never resolves.
-export const MAX_PLAYLIST_TRACKS = 200;
+// Safety bound on a normal user playlist. Finite "PL…"/"OLAK…" playlists almost
+// always fall well under this; it exists only so a pathologically huge playlist
+// can't blow up memory or the timeline UI. Real playlists import in full.
+export const MAX_PLAYLIST_TRACKS = 1000;
+
+// Tighter bound reserved for auto-generated Mix/Radio playlists (ids starting
+// with "RD"). These paginate ENDLESSLY — every page returns a fresh
+// nextPageToken — so a cap is mandatory or the import request never resolves.
+// Kept small so importing a radio stays fast and the result is a sane snapshot.
+export const MAX_MIX_TRACKS = 200;
 
 type PlaylistItemsResponse = {
   nextPageToken?: string;
@@ -76,6 +80,10 @@ export async function fetchPlaylistTracks(
   playlistId: string,
   apiKey: string,
 ): Promise<PlaylistTrack[]> {
+  // Mix/Radio playlists paginate forever, so they get the tight cap; normal
+  // playlists get the high safety bound and import in full.
+  const cap = isMixPlaylistId(playlistId) ? MAX_MIX_TRACKS : MAX_PLAYLIST_TRACKS;
+
   // 1. Collect video ids + titles, following pagination.
   const items: { videoId: string; title: string }[] = [];
   let pageToken: string | undefined;
@@ -94,10 +102,10 @@ export async function fetchPlaylistTracks(
       items.push({ videoId: it.contentDetails.videoId, title: it.snippet.title });
     }
     pageToken = data.nextPageToken;
-  } while (pageToken && items.length < MAX_PLAYLIST_TRACKS);
+  } while (pageToken && items.length < cap);
 
-  // Cap the playlist so an endless Mix/Radio (or a huge playlist) stays bounded.
-  if (items.length > MAX_PLAYLIST_TRACKS) items.length = MAX_PLAYLIST_TRACKS;
+  // Cap so an endless Mix/Radio (or a huge playlist) stays bounded.
+  if (items.length > cap) items.length = cap;
 
   // 2. Resolve durations in batches of 50.
   const durations = new Map<string, number>();
