@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { parseIso8601Duration } from './playlist-logic';
 import {
   totalDuration,
@@ -64,6 +64,7 @@ const PLAYING: PlaylistState = {
   startedAt: 1000,
   positionAtStart: 0,
   updatedAt: 1000,
+  shuffle: false,
 };
 
 describe('totalDuration', () => {
@@ -124,18 +125,25 @@ const NOW = 10_000;
 describe('computeNextPlaylistState', () => {
   it('loads a playlist starting at position 0 and playing', () => {
     const empty: PlaylistState = {
-      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0,
+      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0, shuffle: false,
     };
     const action: PlaylistAction = { action: 'loadPlaylist', tracks: TRACKS };
     const result = computeNextPlaylistState(empty, action, NOW);
     expect(result).toEqual({
       kind: 'ok',
-      next: { tracks: TRACKS, isPlaying: true, startedAt: NOW, positionAtStart: 0, updatedAt: NOW },
+      next: {
+        tracks: TRACKS.map((t, i) => ({ ...t, sourceIndex: i })),
+        isPlaying: true,
+        startedAt: NOW,
+        positionAtStart: 0,
+        updatedAt: NOW,
+        shuffle: false,
+      },
     });
   });
   it('rejects an empty playlist load', () => {
     const empty: PlaylistState = {
-      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0,
+      tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0, shuffle: false,
     };
     const result = computeNextPlaylistState(empty, { action: 'loadPlaylist', tracks: [] }, NOW);
     expect(result.kind).toBe('error');
@@ -149,13 +157,13 @@ describe('computeNextPlaylistState', () => {
   });
   it('play resumes from the frozen position', () => {
     const paused: PlaylistState = {
-      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 42, updatedAt: 5_000,
+      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 42, updatedAt: 5_000, shuffle: false,
     };
     const result = computeNextPlaylistState(paused, { action: 'play' }, NOW);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
     expect(result.next).toEqual({
-      tracks: TRACKS, isPlaying: true, startedAt: NOW, positionAtStart: 42, updatedAt: NOW,
+      tracks: TRACKS, isPlaying: true, startedAt: NOW, positionAtStart: 42, updatedAt: NOW, shuffle: false,
     });
   });
   it('seekToTrack jumps to the track start offset', () => {
@@ -201,7 +209,7 @@ describe('computeNextPlaylistState', () => {
 
   it('seek keeps a paused playlist paused', () => {
     const paused: PlaylistState = {
-      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 10, updatedAt: 5_000,
+      tracks: TRACKS, isPlaying: false, startedAt: 5_000, positionAtStart: 10, updatedAt: 5_000, shuffle: false,
     };
     const result = computeNextPlaylistState(paused, { action: 'seek', position: 60 }, NOW);
     expect(result.kind).toBe('ok');
@@ -216,5 +224,142 @@ describe('computeNextPlaylistState', () => {
     if (lo.kind !== 'ok' || hi.kind !== 'ok') throw new Error('expected ok');
     expect(lo.next.positionAtStart).toBe(0);
     expect(hi.next.positionAtStart).toBe(350); // total duration
+  });
+
+  it('loadPlaylist resets shuffle to false and stamps sourceIndex', () => {
+    const shuffled: PlaylistState = { ...PLAYING, shuffle: true };
+    const result = computeNextPlaylistState(shuffled, { action: 'loadPlaylist', tracks: TRACKS }, NOW);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.shuffle).toBe(false);
+    expect(result.next.tracks.map((t) => t.sourceIndex)).toEqual([0, 1, 2]);
+  });
+});
+
+// Tracks carrying their original import order, as loadPlaylist would stamp them.
+const STAMPED = TRACKS.map((t, i) => ({ ...t, sourceIndex: i }));
+const PLAYING_STAMPED: PlaylistState = { ...PLAYING, tracks: STAMPED };
+const sourceIndexes = (s: PlaylistState) => s.tracks.map((t) => t.sourceIndex).sort((a, b) => (a ?? 0) - (b ?? 0));
+
+describe('computeNextPlaylistState shuffle', () => {
+  // Deterministic Fisher–Yates: random → 0 always picks the first slot.
+  afterEach(() => vi.restoreAllMocks());
+  function fixedRandom() {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+  }
+
+  it('enable keeps the current track first and preserves its offset', () => {
+    fixedRandom();
+    // now 151_000: pos 150 → track B (index 1), offset 50.
+    const result = computeNextPlaylistState(PLAYING_STAMPED, { action: 'shuffle', enabled: true }, 151_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.shuffle).toBe(true);
+    expect(result.next.tracks).toHaveLength(3);
+    expect(result.next.tracks[0].videoId).toBe('bbbbbbbbbbb');
+    expect(result.next.positionAtStart).toBe(50);
+    expect(result.next.startedAt).toBe(151_000);
+    expect(result.next.isPlaying).toBe(true);
+    expect(sourceIndexes(result.next)).toEqual([0, 1, 2]); // same multiset
+  });
+
+  it('enable preserves a paused state, current track first', () => {
+    fixedRandom();
+    const paused: PlaylistState = { ...PLAYING_STAMPED, isPlaying: false, positionAtStart: 150, startedAt: 5_000 };
+    const result = computeNextPlaylistState(paused, { action: 'shuffle', enabled: true }, NOW);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.isPlaying).toBe(false);
+    expect(result.next.tracks[0].videoId).toBe('bbbbbbbbbbb');
+    expect(result.next.positionAtStart).toBe(50);
+  });
+
+  it('disable restores the original import order and keeps the current track', () => {
+    // Shuffled order [B,C,A]; playing inside C.
+    const shuffledTracks = [STAMPED[1], STAMPED[2], STAMPED[0]]; // B(200),C(50),A(100)
+    const state: PlaylistState = { ...PLAYING, tracks: shuffledTracks, shuffle: true, startedAt: 1000, positionAtStart: 0 };
+    // now 221_000: pos 220 → C (index 1 of shuffled), offset 20.
+    const result = computeNextPlaylistState(state, { action: 'shuffle', enabled: false }, 221_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.shuffle).toBe(false);
+    expect(result.next.tracks.map((t) => t.sourceIndex)).toEqual([0, 1, 2]); // A,B,C
+    // C is at index 2 in restored order: offset 100+200 + 20 within = 320.
+    expect(result.next.positionAtStart).toBe(320);
+    expect(result.next.isPlaying).toBe(true);
+  });
+
+  it('disable relocates the current track by sourceIndex, not videoId (duplicates)', () => {
+    // Original order with a duplicate videoId 'dup' at sourceIndex 1 and 3.
+    const orig = [
+      { videoId: 'aaaaaaaaaaa', title: 'A', durationS: 100, sourceIndex: 0 },
+      { videoId: 'dupdupdupdu', title: 'Dup', durationS: 100, sourceIndex: 1 },
+      { videoId: 'ccccccccccc', title: 'C', durationS: 50, sourceIndex: 2 },
+      { videoId: 'dupdupdupdu', title: 'Dup2', durationS: 80, sourceIndex: 3 },
+    ];
+    // Shuffled [C, Dup2, A, Dup]; playing inside Dup2 (sourceIndex 3).
+    const shuffledTracks = [orig[2], orig[3], orig[0], orig[1]];
+    const state: PlaylistState = { ...PLAYING, tracks: shuffledTracks, shuffle: true, startedAt: 1000, positionAtStart: 0 };
+    // now 71_000: pos 70 → Dup2 (index 1), offset 20.
+    const result = computeNextPlaylistState(state, { action: 'shuffle', enabled: false }, 71_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    // Restored [A,Dup,C,Dup2]; Dup2 at index 3 → offset 100+100+50 + 20 = 270.
+    expect(result.next.positionAtStart).toBe(270);
+  });
+
+  it('enable removes the playing occurrence by position (duplicates)', () => {
+    fixedRandom();
+    const tracks = [
+      { videoId: 'aaaaaaaaaaa', title: 'A', durationS: 100, sourceIndex: 0 },
+      { videoId: 'dupdupdupdu', title: 'Dup', durationS: 100, sourceIndex: 1 },
+      { videoId: 'dupdupdupdu', title: 'Dup2', durationS: 80, sourceIndex: 2 },
+    ];
+    const state: PlaylistState = { ...PLAYING, tracks, shuffle: false, startedAt: 1000, positionAtStart: 0 };
+    // now 151_000: pos 150 → Dup (index 1), offset 50.
+    const result = computeNextPlaylistState(state, { action: 'shuffle', enabled: true }, 151_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.tracks[0].sourceIndex).toBe(1); // the playing occurrence at front
+    expect(result.next.tracks).toHaveLength(3);
+    expect(sourceIndexes(result.next)).toEqual([0, 1, 2]); // Dup2 still present
+    expect(result.next.positionAtStart).toBe(50);
+  });
+
+  it('enable on an ended playlist reorders and stays ended', () => {
+    fixedRandom();
+    // now 401_000: pos 400 > 350 → ended.
+    const result = computeNextPlaylistState(PLAYING_STAMPED, { action: 'shuffle', enabled: true }, 401_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.shuffle).toBe(true);
+    expect(result.next.tracks).toHaveLength(3);
+    expect(result.next.positionAtStart).toBe(350); // total duration → still ended
+  });
+
+  it('disable on an ended playlist restores order and stays ended', () => {
+    const shuffledTracks = [STAMPED[1], STAMPED[2], STAMPED[0]];
+    const state: PlaylistState = { ...PLAYING, tracks: shuffledTracks, shuffle: true, startedAt: 1000, positionAtStart: 0 };
+    const result = computeNextPlaylistState(state, { action: 'shuffle', enabled: false }, 401_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.shuffle).toBe(false);
+    expect(result.next.tracks.map((t) => t.sourceIndex)).toEqual([0, 1, 2]);
+    expect(result.next.positionAtStart).toBe(350);
+  });
+
+  it('handles an empty playlist by only flipping the flag', () => {
+    const empty: PlaylistState = { tracks: [], isPlaying: false, startedAt: 0, positionAtStart: 0, updatedAt: 0, shuffle: false };
+    const on = computeNextPlaylistState(empty, { action: 'shuffle', enabled: true }, NOW);
+    if (on.kind !== 'ok') throw new Error('expected ok');
+    expect(on.next.shuffle).toBe(true);
+    expect(on.next.tracks).toEqual([]);
+  });
+
+  it('is a no-op when already in the requested mode', () => {
+    const result = computeNextPlaylistState(PLAYING_STAMPED, { action: 'shuffle', enabled: false }, NOW);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next).toBe(PLAYING_STAMPED); // unchanged reference
+  });
+
+  it('disable falls back to identity match when sourceIndex is absent (legacy state)', () => {
+    const legacy: PlaylistState = { ...PLAYING, tracks: TRACKS, shuffle: true, startedAt: 1000, positionAtStart: 0 };
+    // now 151_000: pos 150 → B (index 1), offset 50. No sourceIndex anywhere.
+    const result = computeNextPlaylistState(legacy, { action: 'shuffle', enabled: false }, 151_000);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.next.tracks.map((t) => t.videoId)).toEqual(TRACKS.map((t) => t.videoId));
+    expect(result.next.positionAtStart).toBe(150); // B at index 1 → 100 + 50
   });
 });

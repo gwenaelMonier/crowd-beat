@@ -96,11 +96,14 @@ export function computeNextPlaylistState(
       return {
         kind: 'ok',
         next: {
-          tracks: action.tracks,
+          // Stamp the original order so shuffle-off can restore it, and start
+          // a fresh playlist unshuffled.
+          tracks: action.tracks.map((t, i) => ({ ...t, sourceIndex: i })),
           isPlaying: true,
           startedAt: now,
           positionAtStart: 0,
           updatedAt: now,
+          shuffle: false,
         },
       };
     }
@@ -189,5 +192,88 @@ export function computeNextPlaylistState(
         next: { ...current, positionAtStart: position, startedAt: now, updatedAt: now },
       };
     }
+    case 'shuffle': {
+      // No-op if already in the requested mode (idempotent across concurrent clients).
+      if (current.shuffle === action.enabled) return { kind: 'ok', next: current };
+
+      // Empty playlist: just flip the flag.
+      if (current.tracks.length === 0) {
+        return {
+          kind: 'ok',
+          next: { ...current, shuffle: action.enabled, updatedAt: now },
+        };
+      }
+
+      const { index, offsetS, ended } = resolvePlaylistPosition(current, now);
+
+      if (action.enabled) {
+        // Keep the currently-playing track at the front, shuffle the rest. When
+        // ended there's no current track, so just shuffle everything.
+        const newTracks = ended
+          ? shuffleArray(current.tracks)
+          : [current.tracks[index], ...shuffleArray(current.tracks.filter((_, i) => i !== index))];
+        return {
+          kind: 'ok',
+          next: {
+            ...current,
+            tracks: newTracks,
+            shuffle: true,
+            positionAtStart: ended ? totalDuration(newTracks) : offsetS,
+            startedAt: now,
+            updatedAt: now,
+          },
+        };
+      }
+
+      // Disable: restore the original import order (sort by sourceIndex; stable
+      // for legacy tracks that lack it) and re-anchor on the current track,
+      // located by sourceIndex — robust to duplicate videoIds.
+      const restored = [...current.tracks].sort(
+        (a, b) => (a.sourceIndex ?? 0) - (b.sourceIndex ?? 0),
+      );
+      if (ended) {
+        return {
+          kind: 'ok',
+          next: {
+            ...current,
+            tracks: restored,
+            shuffle: false,
+            positionAtStart: totalDuration(restored),
+            startedAt: now,
+            updatedAt: now,
+          },
+        };
+      }
+      const currentTrack = current.tracks[index];
+      let newIndex =
+        currentTrack.sourceIndex !== undefined
+          ? restored.findIndex((t) => t.sourceIndex === currentTrack.sourceIndex)
+          : -1;
+      if (newIndex < 0) newIndex = restored.indexOf(currentTrack); // identity fallback
+      if (newIndex < 0) newIndex = index; // last resort
+      return {
+        kind: 'ok',
+        next: {
+          ...current,
+          tracks: restored,
+          shuffle: false,
+          positionAtStart: trackStartOffset(restored, newIndex) + offsetS,
+          startedAt: now,
+          updatedAt: now,
+        },
+      };
+    }
   }
+}
+
+/** Fisher–Yates on a copy. Safe to use Math.random here: this runs once per
+ *  control POST and the resulting order is persisted to shared state, so every
+ *  device consumes the same sequence. Never call this during a React render. */
+function shuffleArray<T>(items: T[]): T[] {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }

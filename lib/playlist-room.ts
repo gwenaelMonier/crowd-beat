@@ -12,11 +12,14 @@ export const INITIAL_PLAYLIST_STATE: PlaylistState = {
   startedAt: 0,
   positionAtStart: 0,
   updatedAt: 0,
+  shuffle: false,
 };
 
 export async function getPlaylistState(): Promise<PlaylistState> {
   const stored = await redis.get<PlaylistState>(PLAYLIST_ROOM_KEY);
-  return stored ?? INITIAL_PLAYLIST_STATE;
+  // Spread over the initial state so fields added later (e.g. shuffle) are
+  // backfilled on blobs written before they existed.
+  return stored ? { ...INITIAL_PLAYLIST_STATE, ...stored } : INITIAL_PLAYLIST_STATE;
 }
 
 export async function setPlaylistState(state: PlaylistState): Promise<void> {

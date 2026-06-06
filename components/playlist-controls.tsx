@@ -1,10 +1,10 @@
 'use client';
 
-import { SkipBack, SkipForward, Play, Pause } from 'lucide-react';
+import { SkipBack, SkipForward, Play, Pause, Shuffle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { PlaylistAction } from '@/types/room';
 
-type Props = { isPlaying: boolean; hasPlaylist: boolean };
+type Props = { isPlaying: boolean; hasPlaylist: boolean; shuffle: boolean };
 
 async function send(action: PlaylistAction) {
   await fetch('/api/playlist/control', {
@@ -14,9 +14,19 @@ async function send(action: PlaylistAction) {
   });
 }
 
-export function PlaylistControls({ isPlaying, hasPlaylist }: Props) {
+export function PlaylistControls({ isPlaying, hasPlaylist, shuffle }: Props) {
   return (
     <div className="flex items-center justify-center gap-2">
+      <Button
+        variant={shuffle ? 'default' : 'secondary'}
+        size="icon"
+        disabled={!hasPlaylist}
+        aria-pressed={shuffle}
+        aria-label="Shuffle"
+        onClick={() => send({ action: 'shuffle', enabled: !shuffle })}
+      >
+        <Shuffle className="size-5" />
+      </Button>
       <Button variant="secondary" size="icon" disabled={!hasPlaylist} onClick={() => send({ action: 'prev' })} aria-label="Previous track">
         <SkipBack className="size-5" />
       </Button>

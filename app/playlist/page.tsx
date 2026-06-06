@@ -71,7 +71,7 @@ export default function PlaylistPage() {
             )}
           </div>
 
-          <PlaylistControls isPlaying={!!state?.isPlaying && !ended} hasPlaylist={hasPlaylist} />
+          <PlaylistControls isPlaying={!!state?.isPlaying && !ended} hasPlaylist={hasPlaylist} shuffle={!!state?.shuffle} />
 
           <PlaylistSeekBar state={state} clockOffsetMs={clockOffsetMs} />
 

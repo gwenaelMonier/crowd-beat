@@ -25,6 +25,9 @@ export type PlaylistTrack = {
   videoId: string;
   title: string;
   durationS: number;
+  /** Original import position. Assigned by loadPlaylist; used to restore the
+   *  unshuffled order. Optional so import payloads and legacy state stay valid. */
+  sourceIndex?: number;
 };
 
 export type PlaylistState = {
@@ -33,6 +36,8 @@ export type PlaylistState = {
   startedAt: number;
   positionAtStart: number;
   updatedAt: number;
+  /** Whether `tracks` is currently in a shuffled order (shared across devices). */
+  shuffle: boolean;
 };
 
 export type PlaylistAction =
@@ -42,7 +47,8 @@ export type PlaylistAction =
   | { action: 'next' }
   | { action: 'prev' }
   | { action: 'seekToTrack'; index: number }
-  | { action: 'seek'; position: number };
+  | { action: 'seek'; position: number }
+  | { action: 'shuffle'; enabled: boolean };
 
 export type PlaylistServerEvent =
   | { type: 'state'; state: PlaylistState }
